@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "parser.h"
 
@@ -48,14 +49,20 @@ char buf[1024];
 	int i,j;
 
 	printf("msh> ");	
+
+	int fi;				//fe --> Descriptor de fichero de entrada.
+
 	while (fgets(buf, 1024, stdin)) {
 		
+		//line->redirect_input=NULL;				//inicializamos entrada para que no se quede en un bucle infinito
 		line = tokenize(buf);
 		if (line==NULL){
 			continue;
 		}
 		if(line->redirect_input!=NULL){
 			//Codigo para leer de un fichero la entrada.(variable input = ...)
+			fi = open(line->redirect_input, O_RDONLY);
+			dup2(fi, STDIN_FILENO);					//Ahora stdin apunta al descriptor de ficheros fe
 		}
 		if(line->redirect_output!=NULL){
 			//Codigo para escribir en un fichero. Igual conviene poner este if al final, puesto que escribir el output en un fichero tiene que ser lo ultimo
@@ -69,19 +76,21 @@ char buf[1024];
 		for(i=0; i<line->ncommands; i++){				//i Itera sobre la lista de comandos
 			//Codigo para ejecutar uno o varios mandatos
 
-			pid_t pid;
-			pid=fork();
-			if(pid==0){
-				execv(line->commands[i].filename, line->commands[i].argv);
-			}
-			else{
-				wait(NULL);
-			}
+			if(line->ncommands==1){				//Pongo este if porque de momento estoy haciendo que funcione para un comando. Veremos si se puede quitar al hacerlo para mas comandos
+				pid_t pid;
+				pid=fork();
+				if(pid==0){
+					execv(line->commands[i].filename, line->commands[i].argv);
+				}
+				else{
+					wait(NULL);
+				}
 
-			for(j=0;j>line->commands[i].argc; j++){		//j Intera sobre los argumentos pasados a cada comando
+				for(j=0;j>line->commands[i].argc; j++){		//j Intera sobre los argumentos pasados a cada comando
 
 				
 
+				}
 			}
 			//Fin de codigo para ejecutar uno o varios mandatos
 		}
