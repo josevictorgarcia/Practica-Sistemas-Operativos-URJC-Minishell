@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -57,9 +58,6 @@ char buf[1024];
 		if (line==NULL){
 			continue;
 		}
-		if(line->redirect_output!=NULL){
-			//Codigo para escribir en un fichero. Igual conviene poner este if al final, puesto que escribir el output en un fichero tiene que ser lo ultimo
-		}
 		if(line->redirect_error!=NULL){
 			//Codigo para escribir el error en un fichero. Igual conviene poner este if al final tambien
 		}
@@ -75,16 +73,23 @@ char buf[1024];
 				pid=fork();
 
 				if(pid==0){
-					int fi, nuevodescriptor;			//Input file descriptor
-					nuevodescriptor = 0;				//Inicializamos nuevodescriptor para que si no entra por el if, se ejecute el comando
+					int fi, fo, nuevodescriptor;			//Input & output file descriptor
+					nuevodescriptor = 0;										//Inicializamos nuevodescriptor para que si no entra por el if, se ejecute el comando
 					if(line->redirect_input!=NULL){
 						fi = open(line->redirect_input, O_RDONLY | O_CLOEXEC);
-						nuevodescriptor = dup2(fi, STDIN_FILENO);			//Ahora stdin apunta al descriptor de ficheros fe
+						nuevodescriptor = dup2(fi, STDIN_FILENO);				//Ahora stdin apunta al descriptor de ficheros fe
+					}
+					if(line->redirect_output!=NULL){
+						fo = open(line->redirect_output, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo no existe, lo creamos con modo por defecto (0666)
+						dup2(fo, STDOUT_FILENO);
 					}
 					if(nuevodescriptor != -1){			//Si no se ha producido ningun error, ejecutamos
-						execv(line->commands[i].filename, line->commands[i].argv);}
-					else{
-						printf("Cannot open '%s' for reading: No such file or directory\n", line->redirect_input);}
+						execv(line->commands[i].filename, line->commands[i].argv);
+						} 
+					else{	//Dejar este else para las redirecciones de errores. Problema: El siguiente mensaje de error se imprime en el archivo de salida por defecto (al ejecutar un mandato con redireccion de entrada no valida (redireccion de salida puede ser valida o no valida))
+						printf("Error: Check input redirection '%s': No such file or directory\n", line->redirect_input);
+						exit(0);
+					}
 				}
 				else{
 					wait(NULL);
