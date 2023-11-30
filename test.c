@@ -58,22 +58,20 @@ char buf[1024];
 		if (line==NULL){
 			continue;
 		}
-		if(line->redirect_error!=NULL){
-			//Codigo para escribir el error en un fichero. Igual conviene poner este if al final tambien
-		}
 		if(line->background){
 			//Ver como hacerlo
 		}	
 		for(i=0; i<line->ncommands; i++){				//i Itera sobre la lista de comandos
 			//Codigo para ejecutar uno o varios mandatos
 
+			//NOTA: Antes de entrar aqui, comprobar que el mandato introducido es valido
 			if(line->ncommands==1){						//Pongo este if porque de momento estoy haciendo que funcione para un comando. Veremos si se puede quitar al hacerlo para mas comandos
 				
 				pid_t pid;
 				pid=fork();
 
 				if(pid==0){
-					int fi, fo, nuevodescriptor;			//Input & output file descriptor
+					int fi, fo, fe, nuevodescriptor;			//Input & output & error file descriptor
 					nuevodescriptor = 0;										//Inicializamos nuevodescriptor para que si no entra por el if, se ejecute el comando
 					if(line->redirect_input!=NULL){
 						fi = open(line->redirect_input, O_RDONLY | O_CLOEXEC);
@@ -83,11 +81,15 @@ char buf[1024];
 						fo = open(line->redirect_output, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo no existe, lo creamos con modo por defecto (0666)
 						dup2(fo, STDOUT_FILENO);
 					}
+					if(line->redirect_error!=NULL){
+						fe = open(line->redirect_error, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo de salida de error no existe, lo creamos con modo por defecto(0666)
+						dup2(fe, STDERR_FILENO);
+					}
 					if(nuevodescriptor != -1){			//Si no se ha producido ningun error, ejecutamos
 						execv(line->commands[i].filename, line->commands[i].argv);
 						} 
-					else{	//Dejar este else para las redirecciones de errores. Problema: El siguiente mensaje de error se imprime en el archivo de salida por defecto (al ejecutar un mandato con redireccion de entrada no valida (redireccion de salida puede ser valida o no valida))
-						printf("Error: Check input redirection '%s': No such file or directory\n", line->redirect_input);
+					else{	//Se imprime un mensaje de error en la salida de error predeterminada, en caso de que sucediera algun problema
+						perror("Error: Check input redirection. No such file or directory");
 						exit(0);
 					}
 				}
