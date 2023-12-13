@@ -10,8 +10,12 @@
 
 #include "parser.h"
 
-int
-main(void) {
+tline * line;
+int **arraypipes;
+int *arraypids;
+int i;
+
+int main(void) {
 /*	char buf[1024];
 	tline * line;
 	int i,j;
@@ -46,8 +50,7 @@ main(void) {
 */
 
 char buf[1024];
-	tline * line;
-	int i,j;
+	//int i;
 
 	printf("msh> ");	
 
@@ -61,51 +64,104 @@ char buf[1024];
 		if(line->background){
 			//Ver como hacerlo
 		}	
-		for(i=0; i<line->ncommands; i++){				//i Itera sobre la lista de comandos
 			//Codigo para ejecutar uno o varios mandatos
 
 			//NOTA: Antes de entrar aqui, comprobar que el mandato introducido es valido
-			if(line->ncommands==1){						//Pongo este if porque de momento estoy haciendo que funcione para un comando. Veremos si se puede quitar al hacerlo para mas comandos
-				
-				pid_t pid;
-				pid=fork();
+		if(line->ncommands==1){						//Pongo este if porque de momento estoy haciendo que funcione para un comando. Veremos si se puede quitar al hacerlo para mas comandos
+			
+			i=0;
+			pid_t pid;
+			pid=fork();
 
+			if(pid==0){
+				int fi, fo, fe, nuevodescriptor;			//Input & output & error file descriptor
+				nuevodescriptor = 0;										//Inicializamos nuevodescriptor para que si no entra por el if, se ejecute el comando
+				if(line->redirect_input!=NULL){
+					fi = open(line->redirect_input, O_RDONLY | O_CLOEXEC);
+					nuevodescriptor = dup2(fi, STDIN_FILENO);				//Ahora stdin apunta al descriptor de ficheros fe
+				}
+				if(line->redirect_output!=NULL){
+					fo = open(line->redirect_output, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo no existe, lo creamos con modo por defecto (0666)
+					dup2(fo, STDOUT_FILENO);
+				}
+				if(line->redirect_error!=NULL){
+					fe = open(line->redirect_error, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo de salida de error no existe, lo creamos con modo por defecto(0666)
+					dup2(fe, STDERR_FILENO);
+				}
+				if(nuevodescriptor != -1){			//Si no se ha producido ningun error, ejecutamos
+					execv(line->commands[i].filename, line->commands[i].argv);
+					} 
+				else{	//Se imprime un mensaje de error en la salida de error predeterminada, en caso de que sucediera algun problema
+					perror("Error: Check input redirection. No such file or directory");
+					exit(0);
+				}
+			}
+			else{
+				wait(NULL);
+			}
+		}
+			//Fin de codigo para ejecutar un mandato
+			//Ahora codigo para ejecutar varios mandatos
+		else{
+			//printf("%d", line->ncommands);
+			int npipes, fi, fo;
+			pid_t pid;
+			npipes = line->ncommands-1;
+			arraypipes = (int**)malloc(npipes*sizeof(int*));
+			arraypids = (int*)malloc((line->ncommands)*sizeof(int));
+			for(i=0; i<npipes; i++){				//Creamos el array de pipes (array de arrays de 2 enteros)
+				arraypipes[i]=(int*)malloc(2*sizeof(int));
+			}
+			for(i=0; i<npipes; i++){				//inicializamos los pipes
+				pipe(arraypipes[i]);					//El pipe n-1 enlaza los procesos n-1 y n
+			}
+			for(i=0; i<line->ncommands; i++){				//creamos procesos hijos
+				pid=fork();
 				if(pid==0){
-					int fi, fo, fe, nuevodescriptor;			//Input & output & error file descriptor
-					nuevodescriptor = 0;										//Inicializamos nuevodescriptor para que si no entra por el if, se ejecute el comando
-					if(line->redirect_input!=NULL){
-						fi = open(line->redirect_input, O_RDONLY | O_CLOEXEC);
-						nuevodescriptor = dup2(fi, STDIN_FILENO);				//Ahora stdin apunta al descriptor de ficheros fe
-					}
-					if(line->redirect_output!=NULL){
-						fo = open(line->redirect_output, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo no existe, lo creamos con modo por defecto (0666)
-						dup2(fo, STDOUT_FILENO);
-					}
-					if(line->redirect_error!=NULL){
-						fe = open(line->redirect_error, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo de salida de error no existe, lo creamos con modo por defecto(0666)
-						dup2(fe, STDERR_FILENO);
-					}
-					if(nuevodescriptor != -1){			//Si no se ha producido ningun error, ejecutamos
+					if(i==0){
+						close(arraypipes[0][0]);
+						if(line->redirect_input != NULL){
+							fi = open(line->redirect_input, O_RDONLY | O_CLOEXEC);
+							dup2(fi, STDIN_FILENO);
+						}
+						dup2(arraypipes[0][1], STDOUT_FILENO);
+						//printf("Ejecutado comando %d\n", i);
 						execv(line->commands[i].filename, line->commands[i].argv);
-						} 
-					else{	//Se imprime un mensaje de error en la salida de error predeterminada, en caso de que sucediera algun problema
-						perror("Error: Check input redirection. No such file or directory");
-						exit(0);
+						printf("Error ejecutando comando %d\n", i);
+					}
+					else if (i==line->ncommands-1){
+						close(arraypipes[i-1][1]);
+						if(line->redirect_output != NULL){
+							fo = open(line->redirect_output, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);	//Si el archivo no existe, lo creamos con modo por defecto (0666)
+							dup2(fo, STDOUT_FILENO);
+						}
+						dup2(arraypipes[i-1][0], STDIN_FILENO);
+						//printf("Ejecutado comando %d\n", i);
+						execv(line->commands[i].filename, line->commands[i].argv);
+						printf("Error ejecutando comando %d\n", i);
+					}
+					else{
+						close(arraypipes[i-1][1]);
+						close(arraypipes[i][0]);
+						dup2(arraypipes[i-1][0], STDIN_FILENO);
+						dup2(arraypipes[i][1], STDOUT_FILENO);
+						//printf("Ejecutado comando %d\n", i);
+						execv(line->commands[i].filename, line->commands[i].argv);
+						printf("Error ejecutando comando %d\n", i);
 					}
 				}
 				else{
-					wait(NULL);
-				}
-
-				for(j=0;j>line->commands[i].argc; j++){		//j Intera sobre los argumentos pasados a cada comando
-
-				
-
+					arraypids[i]=pid;
+					if(i!=line->ncommands-1){
+						close(arraypipes[i][1]);
+					}
 				}
 			}
-			//Fin de codigo para ejecutar uno o varios mandatos
+			for(i=0; i<line->ncommands; i++){
+				waitpid(arraypids[i], NULL, 0);
+			}
 		}
-		
+
 		printf("msh> ");
 	}
 	return 0;
