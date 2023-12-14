@@ -104,7 +104,8 @@ char buf[1024];
 			//Ahora codigo para ejecutar varios mandatos
 		else{
 			//printf("%d", line->ncommands);
-			int npipes, fi, fo;
+			int npipes, fi, fo, fe, nuevodescriptor;
+			nuevodescriptor = 0;
 			pid_t pid;
 			npipes = line->ncommands-1;
 			arraypipes = (int**)malloc(npipes*sizeof(int*));
@@ -118,16 +119,26 @@ char buf[1024];
 			for(i=0; i<line->ncommands; i++){				//creamos procesos hijos
 				pid=fork();
 				if(pid==0){
+					if(line->redirect_error!=NULL){			//Lo primero de todo redirigimos la salida de error para todo el proceso
+						fe = open(line->redirect_error, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
+						dup2(fe, STDERR_FILENO);
+					}
 					if(i==0){
 						close(arraypipes[0][0]);
 						if(line->redirect_input != NULL){
 							fi = open(line->redirect_input, O_RDONLY | O_CLOEXEC);
-							dup2(fi, STDIN_FILENO);
+							nuevodescriptor = dup2(fi, STDIN_FILENO);
 						}
 						dup2(arraypipes[0][1], STDOUT_FILENO);
 						//printf("Ejecutado comando %d\n", i);
-						execv(line->commands[i].filename, line->commands[i].argv);
-						printf("Error ejecutando comando %d\n", i);
+						if(nuevodescriptor != -1){
+							execv(line->commands[i].filename, line->commands[i].argv);
+						}
+						else{
+							perror("Error: Check input redirection. No such file or directory");
+						}
+						fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
+						exit(1);
 					}
 					else if (i==line->ncommands-1){
 						close(arraypipes[i-1][1]);
@@ -138,7 +149,8 @@ char buf[1024];
 						dup2(arraypipes[i-1][0], STDIN_FILENO);
 						//printf("Ejecutado comando %d\n", i);
 						execv(line->commands[i].filename, line->commands[i].argv);
-						printf("Error ejecutando comando %d\n", i);
+						fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
+						exit(1);
 					}
 					else{
 						close(arraypipes[i-1][1]);
@@ -147,7 +159,8 @@ char buf[1024];
 						dup2(arraypipes[i][1], STDOUT_FILENO);
 						//printf("Ejecutado comando %d\n", i);
 						execv(line->commands[i].filename, line->commands[i].argv);
-						printf("Error ejecutando comando %d\n", i);
+						fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
+						exit(1);
 					}
 				}
 				else{
