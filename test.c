@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdio.h>
+#include <string.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -31,6 +31,56 @@ int redirect(int option, char * redirection){	//option: 0 para redireccion de en
 		}
 	}
 	return nuevodescriptor;	//Devuelve -1 si ha ocurrido algun error
+}
+
+int execcd(tline * line){	//Devuelve 0 si el mandato que hemos pasado es cd y 1 en caso contrario
+	if(strcmp(line->commands[i].argv[0], "cd") == 0 && (line->ncommands == 1)){
+		if(line->commands[i].argc > 2){		//Si hay mas argumentos de la cuenta se imprime error y aborta ejecucion
+			fprintf(stderr, "No se puede ejecutar el mandato cd: Numero de argumentos de cd (%d) debe ser 0 o 1\n", line->commands[i].argc);
+		}
+		else{
+			char nuevaruta[1024];					//Aqui guardaremos la ruta del nuevo directorio al que nos moveremos para imprimirlo por pantalla
+			if(line->commands[i].argc == 1){	//Si el mandato solo es cd
+			char *ruta = getenv("HOME");
+				if(chdir(ruta) == 0){
+					getcwd(nuevaruta, 1024);
+					printf(("%s\n"), nuevaruta);
+				}
+				else{
+					fprintf(stderr, "cd: Error al cambiar al directorio %s\n", ruta);
+				}
+			}
+			else {									//Si el mandato es cd Desktop (por ejemplo)
+				char ruta[1024];
+				//printf("%s, --> %c\n", line->commands[i].argv[1], line->commands[i].argv[1][0]);
+				if((char)line->commands[i].argv[1][0] == '/'){
+					strcpy(ruta, line->commands[i].argv[1]);
+				//	printf("%s\n", ruta);
+				}
+				else{
+					getcwd(ruta, 1024);
+					strcat(ruta, "/");
+					strcat(ruta, line->commands[i].argv[1]);
+				//	printf("%s\n", ruta);
+				}
+				if(chdir(ruta) == 0){
+					getcwd(nuevaruta, 1024);
+					printf("%s\n", nuevaruta);
+				}
+				else{
+					fprintf(stderr, "cd: Error al cambiar al directorio %s\n", line->commands[i].argv[1]);
+				}
+			}
+		}
+		return 1;
+	}
+	else{
+		if (strcmp(line->commands[i].argv[0], "cd") == 0 && (line->ncommands != 1)){		//Si ejecutamos mandato cd con pipes, imprimimos error y abortamos ejecucion
+			fprintf(stderr, "No se puede ejecutar el mandato cd. Error al ejecutar el mandato %d\n", i);
+			return 1;
+		}
+	}
+	return 0;
 }
 
 int main(void) {
@@ -89,27 +139,31 @@ char buf[1024];
 			
 			i=0;
 			pid_t pid;
-			pid=fork();
 
-			if(pid==0){
-				int nuevodescriptor;
+			if(!execcd(line)){
+
+				pid=fork();
+
+				if(pid==0){
+					int nuevodescriptor;
 				
-				nuevodescriptor = redirect(STDIN_FILENO, line->redirect_input);
-				redirect(STDOUT_FILENO, line->redirect_output);
-				redirect(STDERR_FILENO, line->redirect_error);
+					nuevodescriptor = redirect(STDIN_FILENO, line->redirect_input);
+					redirect(STDOUT_FILENO, line->redirect_output);
+					redirect(STDERR_FILENO, line->redirect_error);
 
-				if(nuevodescriptor != -1){
-					execv(line->commands[i].filename, line->commands[i].argv);
-					fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
-				} 
-				else{
-					fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
+					if(nuevodescriptor != -1){
+						execv(line->commands[i].filename, line->commands[i].argv);
+						fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
+					} 
+					else{
+						fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
+						exit(1);
+					}
 					exit(1);
 				}
-				exit(1);
-			}
-			else{
-				wait(NULL);
+				else{
+					wait(NULL);
+				}
 			}
 		}
 			//Fin de codigo para ejecutar un mandato
@@ -138,7 +192,7 @@ char buf[1024];
 				pid=fork();
 
 				if(pid==0){
-
+					execcd(line);
 					//redirect(STDERR_FILENO, line->redirect_error);
 					if(i==0){
 						close(arraypipes[0][0]);
