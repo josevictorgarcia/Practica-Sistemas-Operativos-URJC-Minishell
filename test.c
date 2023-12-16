@@ -100,11 +100,12 @@ char buf[1024];
 
 				if(nuevodescriptor != -1){
 					execv(line->commands[i].filename, line->commands[i].argv);
+					fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 				} 
 				else{
-					perror("Error: Check input redirection. No such file or directory");
+					fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
+					exit(1);
 				}
-				fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
 				exit(1);
 			}
 			else{
@@ -146,11 +147,11 @@ char buf[1024];
 						//printf("Ejecutado comando %d\n", i);
 						if(nuevodescriptor != -1){
 							execv(line->commands[i].filename, line->commands[i].argv);
+							fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 						}
 						else{
-							perror("Error: Check input redirection. No such file or directory");
+							fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
 						}
-						fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
 						exit(1);
 					}
 					else if (i==line->ncommands-1){
@@ -159,7 +160,7 @@ char buf[1024];
 						dup2(arraypipes[i-1][0], STDIN_FILENO);
 						//printf("Ejecutado comando %d\n", i);
 						execv(line->commands[i].filename, line->commands[i].argv);
-						fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
+						fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 						exit(1);
 					}
 					else{
@@ -169,7 +170,7 @@ char buf[1024];
 						dup2(arraypipes[i][1], STDOUT_FILENO);
 						//printf("Ejecutado comando %d\n", i);
 						execv(line->commands[i].filename, line->commands[i].argv);
-						fprintf(stderr, "Error ejecutando comando %d: %s\n", i, line->commands[i].argv[0]);
+						fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 						exit(1);
 					}
 				}
