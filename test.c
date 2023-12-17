@@ -83,6 +83,108 @@ int execcd(tline * line){	//Devuelve 0 si el mandato que hemos pasado es cd y 1 
 	return 0;
 }
 
+int execmandato(){
+	pid_t pid;
+	pid=fork();
+
+	if(pid==0){
+		int nuevodescriptor;
+				
+		nuevodescriptor = redirect(STDIN_FILENO, line->redirect_input);
+		redirect(STDOUT_FILENO, line->redirect_output);
+		redirect(STDERR_FILENO, line->redirect_error);
+
+		if(nuevodescriptor != -1){
+			execv(line->commands[i].filename, line->commands[i].argv);
+			fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
+		} 
+		else{
+			fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
+			exit(1);
+		}
+		exit(1);
+	}
+	else{
+		wait(NULL);
+	}
+	return 0;
+}
+
+int execnmandatos(){
+	int npipes, nuevodescriptor;
+	pid_t pid;
+	npipes = line->ncommands-1;
+	arraypipes = (int**)malloc(npipes*sizeof(int*));
+	arraypids = (int*)malloc((line->ncommands)*sizeof(int));
+			
+	for(i=0; i<npipes; i++){
+		arraypipes[i]=(int*)malloc(2*sizeof(int));
+	}
+
+	for(i=0; i<npipes; i++){
+		pipe(arraypipes[i]);
+	}
+
+			//int fe;
+			//fe = open(line->redirect_error, O_APPEND | O_CREAT | O_WRONLY, 0666);
+			//dup2(fe, STDERR_FILENO);
+	redirect(STDERR_FILENO, line->redirect_error);
+	for(i=0; i<line->ncommands; i++){			//Ejecutamos los n mandatos
+
+		pid=fork();
+
+		if(pid==0){
+			execcd(line);
+			//redirect(STDERR_FILENO, line->redirect_error);
+			if(i==0){
+				close(arraypipes[0][0]);
+				nuevodescriptor = redirect (STDIN_FILENO, line->redirect_input);
+				dup2(arraypipes[0][1], STDOUT_FILENO);
+				//printf("Ejecutado comando %d\n", i);
+				if(nuevodescriptor != -1){
+					execv(line->commands[i].filename, line->commands[i].argv);
+					fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
+				}
+				else{
+					fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
+				}
+				exit(1);
+			}
+			else if (i==line->ncommands-1){
+				close(arraypipes[i-1][1]);
+				redirect(STDOUT_FILENO, line->redirect_output);
+				dup2(arraypipes[i-1][0], STDIN_FILENO);
+				//printf("Ejecutado comando %d\n", i);
+				execv(line->commands[i].filename, line->commands[i].argv);
+				fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
+				exit(1);
+			}
+			else{
+				close(arraypipes[i-1][1]);
+				close(arraypipes[i][0]);
+				dup2(arraypipes[i-1][0], STDIN_FILENO);
+				dup2(arraypipes[i][1], STDOUT_FILENO);
+				//printf("Ejecutado comando %d\n", i);
+				execv(line->commands[i].filename, line->commands[i].argv);
+				fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
+				exit(1);
+			}
+		}
+
+		else{
+			arraypids[i]=pid;
+			if(i!=line->ncommands-1){
+				close(arraypipes[i][1]);
+			}
+		}
+	}
+
+	for(i=0; i<line->ncommands; i++){
+		waitpid(arraypids[i], NULL, 0);
+	}
+	return 0;
+}
+
 int main(void) {
 /*	char buf[1024];
 	tline * line;
@@ -138,108 +240,18 @@ char buf[1024];
 		if(line->ncommands==1){						//Pongo este if porque de momento estoy haciendo que funcione para un comando. Veremos si se puede quitar al hacerlo para mas comandos
 			
 			i=0;
-			pid_t pid;
 
 			if(!execcd(line)){
 
-				pid=fork();
+				execmandato();
 
-				if(pid==0){
-					int nuevodescriptor;
-				
-					nuevodescriptor = redirect(STDIN_FILENO, line->redirect_input);
-					redirect(STDOUT_FILENO, line->redirect_output);
-					redirect(STDERR_FILENO, line->redirect_error);
-
-					if(nuevodescriptor != -1){
-						execv(line->commands[i].filename, line->commands[i].argv);
-						fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
-					} 
-					else{
-						fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
-						exit(1);
-					}
-					exit(1);
-				}
-				else{
-					wait(NULL);
-				}
 			}
 		}
 			//Fin de codigo para ejecutar un mandato
 			//Ahora codigo para ejecutar varios mandatos
 		else{
-			int npipes, nuevodescriptor;
-			pid_t pid;
-			npipes = line->ncommands-1;
-			arraypipes = (int**)malloc(npipes*sizeof(int*));
-			arraypids = (int*)malloc((line->ncommands)*sizeof(int));
 			
-			for(i=0; i<npipes; i++){
-				arraypipes[i]=(int*)malloc(2*sizeof(int));
-			}
-
-			for(i=0; i<npipes; i++){
-				pipe(arraypipes[i]);
-			}
-
-			//int fe;
-			//fe = open(line->redirect_error, O_APPEND | O_CREAT | O_WRONLY, 0666);
-			//dup2(fe, STDERR_FILENO);
-			redirect(STDERR_FILENO, line->redirect_error);
-			for(i=0; i<line->ncommands; i++){			//Ejecutamos los n mandatos
-
-				pid=fork();
-
-				if(pid==0){
-					execcd(line);
-					//redirect(STDERR_FILENO, line->redirect_error);
-					if(i==0){
-						close(arraypipes[0][0]);
-						nuevodescriptor = redirect (STDIN_FILENO, line->redirect_input);
-						dup2(arraypipes[0][1], STDOUT_FILENO);
-						//printf("Ejecutado comando %d\n", i);
-						if(nuevodescriptor != -1){
-							execv(line->commands[i].filename, line->commands[i].argv);
-							fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
-						}
-						else{
-							fprintf(stderr, "%s: Error. Check input redirection. No such file or directory\n", line->redirect_input);
-						}
-						exit(1);
-					}
-					else if (i==line->ncommands-1){
-						close(arraypipes[i-1][1]);
-						redirect(STDOUT_FILENO, line->redirect_output);
-						dup2(arraypipes[i-1][0], STDIN_FILENO);
-						//printf("Ejecutado comando %d\n", i);
-						execv(line->commands[i].filename, line->commands[i].argv);
-						fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
-						exit(1);
-					}
-					else{
-						close(arraypipes[i-1][1]);
-						close(arraypipes[i][0]);
-						dup2(arraypipes[i-1][0], STDIN_FILENO);
-						dup2(arraypipes[i][1], STDOUT_FILENO);
-						//printf("Ejecutado comando %d\n", i);
-						execv(line->commands[i].filename, line->commands[i].argv);
-						fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
-						exit(1);
-					}
-				}
-
-				else{
-					arraypids[i]=pid;
-					if(i!=line->ncommands-1){
-						close(arraypipes[i][1]);
-					}
-				}
-			}
-
-			for(i=0; i<line->ncommands; i++){
-				waitpid(arraypids[i], NULL, 0);
-			}
+			execnmandatos();
 
 		}
 
