@@ -83,6 +83,56 @@ int execcd(tline * line){	//Devuelve 0 si el mandato que hemos pasado es cd y 1 
 	return 0;
 }
 
+int showmask(){
+    mode_t defaultperm;
+	defaultperm = umask(0);
+	umask(defaultperm);
+    printf("%04o\n", defaultperm);
+	return 0;
+}
+
+int execumask(){
+	if (strcmp(line->commands[i].argv[0], "umask") == 0 && (line->ncommands == 1)){
+		if(line->commands[i].argc == 1){
+			showmask();
+		}
+		else{
+			if(line->commands[i].argc == 2){
+				mode_t nuevamascara = 0;							//Comprobar que el numero que nos han pasado esta en octal
+				char *mascara = line->commands[i].argv[1];
+    			char c = *mascara;
+    			while(c != '\0'){
+        			if(c < '0' || c > '7') {	
+						fprintf(stderr,"Expresion en octal no valida\n");
+						return 1;
+        			}
+        			nuevamascara <<= 3;
+        			nuevamascara += c - '0';
+        			if(nuevamascara > 0777) {	
+						fprintf(stderr,"Expresion en octal no valida. Se excede el maximo (0777)\n");
+						return 1;
+        			}
+        			mascara += 1;
+        			c = *mascara;
+    			}
+    			
+    			umask(nuevamascara);
+			}
+			else{
+				fprintf(stderr, "umask: Numero de argumentos (%d) debe ser 0 o 1\n", line->commands[i].argc);
+			}
+		}
+		return 1;
+	}
+	else{
+		if(strcmp(line->commands[i].argv[0], "umask") == 0 && (line->ncommands != 1)){
+			fprintf(stderr, "No se puede ejecutar el mandato umask. Error al ejecutar el mandato %d.\n", i);
+			return 1;
+		}
+	}
+	return 0;
+}
+
 int execmandato(){
 	pid_t pid;
 	pid=fork();
@@ -135,6 +185,7 @@ int execnmandatos(){
 
 		if(pid==0){
 			execcd(line);
+			execumask();
 			//redirect(STDERR_FILENO, line->redirect_error);
 			if(i==0){
 				close(arraypipes[0][0]);
@@ -241,7 +292,7 @@ char buf[1024];
 			
 			i=0;
 
-			if(!execcd(line)){
+			if(!execcd(line) && !execumask()){
 
 				execmandato();
 
