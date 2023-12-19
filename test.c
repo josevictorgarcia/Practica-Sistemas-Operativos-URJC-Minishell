@@ -240,6 +240,10 @@ void abortar(){
 	printf("\n");
 }
 
+void salir(){
+	exit(0);
+}
+
 int main(void) {
 /*	char buf[1024];
 	tline * line;
@@ -278,9 +282,10 @@ char buf[1024];
 	//int i;
 
 	printf("msh> ");	
+	signal(SIGINT, SIG_IGN);
 
 	while (fgets(buf, 1024, stdin)) {
-		
+
 		signal(SIGINT, abortar);
 		//line->redirect_input=NULL;				//inicializamos entrada para que no se quede en un bucle infinito
 		line = tokenize(buf);
@@ -299,6 +304,9 @@ char buf[1024];
 
 			if(!execcd(line) && !execumask()){
 
+				if(strcmp(line->commands[0].argv[0], "exit") == 0){
+					salir();
+				}
 				execmandato();
 
 			}
