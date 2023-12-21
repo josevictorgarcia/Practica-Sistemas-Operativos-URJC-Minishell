@@ -10,10 +10,18 @@
 
 #include "parser.h"
 
+struct tbackground{
+	int pid;				//para guardar el pid clave del proceso
+	char *linea;			//para guardar el nombre de la linea
+	int status;			//para comprobar si ha acabado o no
+};
+
 tline * line;
 int **arraypipes;
 int *arraypids;
 int i;
+int max, j;					//j sirve para contar de 0 a 1023 procesos en bg. max para la ultima posicion ocupada del array de procesos en background
+struct tbackground procesos[1024];	//array para guardar los procesos
 
 int redirect(int option, char * redirection){	//option: 0 para redireccion de entrada, cualquier otra cosa para redireccion de salida o error (Redirecciones de salida y error se tratan de la misma forma)
 	int descriptor, nuevodescriptor;			//Usare 0 para redireccion de entrada, 1 para redireccion de salida y 2 para redireccion de error
@@ -155,7 +163,16 @@ int execmandato(){
 		exit(1);
 	}
 	else{
-		wait(NULL);
+		if(!line->background){
+			wait(NULL);
+		}
+		else{
+			procesos[max].pid = pid;
+		//	procesos[max].status = waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
+		//	waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
+			max++;
+			max = max % 1024;
+		}
 	}
 	return 0;
 }
@@ -244,6 +261,49 @@ void salir(){
 	exit(0);
 }
 
+int jobs(){
+	//printf("%d", waitpid(procesos[0].pid, &procesos[0].status, WNOHANG));
+	if(line->ncommands==1 && strcmp(line->commands[i].argv[i], "jobs") == 0){
+		for(j=0; j<1023; j++){
+			procesos[j].status = waitpid(procesos[j].pid, &procesos[j].status, WNOHANG);
+			if (procesos[j].status!=-1 && procesos[j].linea != NULL) {
+				printf("[%d] Running 			%s", j, procesos[j].linea);
+			}
+			else if(procesos[j].linea != NULL){
+				printf("[%d] Done 			%s", j, procesos[j].linea);
+				procesos[j].status = 0;
+				free(procesos[j].linea);
+				procesos[j].linea = NULL;
+			}
+		}
+		return 1;
+	}
+	else if(line->ncommands!=1 && strcmp(line->commands[i].argv[i], "jobs") == 0){
+		fprintf(stderr, "No se puede ejecutar el mandato jobs. Error al ejecutar el mandato %d\n", i);
+		return 1;
+	}
+	return 0;
+}
+
+void mostrarprocesosterminados(){
+	//printf("%d", waitpid(procesos[0].pid, &procesos[0].status, WNOHANG));
+	for(j=0; j<1023; j++){
+		procesos[j].status = waitpid(procesos[j].pid, &procesos[j].status, WNOHANG);
+		if (procesos[j].status==-1 && procesos[j].linea != NULL) {
+			printf("Proceso [%d] con pid %d terminado: %s", j, procesos[j].pid, procesos[j].linea);
+			procesos[j].status = 0;
+			free(procesos[j].linea);
+			procesos[j].linea = NULL;
+		}
+	}
+}
+
+void updatebackgroundstatus(){
+	for(j=0; j<1023; j++){
+		procesos[j].status = waitpid(procesos[j].pid, &procesos[j].status, WNOHANG);
+	}
+}
+
 int main(void) {
 /*	char buf[1024];
 	tline * line;
@@ -278,6 +338,7 @@ int main(void) {
 	}
 */
 
+max = 0;
 char buf[1024];
 	//int i;
 
@@ -286,14 +347,19 @@ char buf[1024];
 
 	while (fgets(buf, 1024, stdin)) {
 
+		updatebackgroundstatus();
+
 		signal(SIGINT, abortar);
 		//line->redirect_input=NULL;				//inicializamos entrada para que no se quede en un bucle infinito
 		line = tokenize(buf);
+
 		if (line==NULL){
 			continue;
 		}
-		if(line->background){
+		if(line->background==1){
 			//Ver como hacerlo
+			procesos[max].linea = (char *)malloc(1024*sizeof(char));
+			strcpy(procesos[max].linea, buf);
 		}	
 			//Codigo para ejecutar uno o varios mandatos
 
@@ -302,7 +368,7 @@ char buf[1024];
 			
 			i=0;
 
-			if(!execcd(line) && !execumask()){
+			if(!execcd(line) && !execumask() && !jobs()){
 
 				if(strcmp(line->commands[0].argv[0], "exit") == 0){
 					salir();
@@ -319,8 +385,10 @@ char buf[1024];
 
 		}
 
+		mostrarprocesosterminados();
 		printf("msh> ");
 		signal(SIGINT, SIG_IGN);
+		//mostrarprocesosterminados();
 	}
 	return 0;
 }
