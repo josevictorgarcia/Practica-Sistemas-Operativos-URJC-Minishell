@@ -10,21 +10,24 @@
 
 #include "parser.h"
 
-struct tbackground{
+//Para compilar: gcc -Wall -Wextra myshell.c libparser.a -o myshell -static
+//Para ejecutar: ./myshell
+
+struct tbackground{			//Tipo proceso en background
 	int pid;				//para guardar el pid clave del proceso
 	char *linea;			//para guardar el nombre de la linea
-	int status;			//para comprobar si ha acabado o no
+	int status;				//para comprobar si ha acabado o no
 };
 
 tline * line;
 int **arraypipes;
 int *arraypids;
 int i;
-int max, j;					//j sirve para contar de 0 a 1023 procesos en bg. max para la ultima posicion ocupada del array de procesos en background
-struct tbackground procesos[1024];	//array para guardar los procesos
+int max, j;										//j sirve para contar de 0 a 1023 procesos en bg. max para la ultima posicion ocupada del array de procesos en background
+struct tbackground procesos[1024];				//array para guardar los procesos que se ejecutan en background
 
-int redirect(int option, char * redirection){	//option: 0 para redireccion de entrada, cualquier otra cosa para redireccion de salida o error (Redirecciones de salida y error se tratan de la misma forma)
-	int descriptor, nuevodescriptor;			//Usare 0 para redireccion de entrada, 1 para redireccion de salida y 2 para redireccion de error
+int redirect(int option, char * redirection){	//Redirige entrada, salida y salida de error estandar. Option: STDIN_FILENO para redireccion de entrada, STDOUT_FILENO para salida estandar y STDERR_FILENO para salida de error. (Redirecciones de salida y error se tratan de la misma forma)
+	int descriptor, nuevodescriptor;			
 	nuevodescriptor = 0;
 	if(option == STDIN_FILENO){
 		if(redirection != NULL){
@@ -38,17 +41,17 @@ int redirect(int option, char * redirection){	//option: 0 para redireccion de en
 			nuevodescriptor = dup2(descriptor, option);
 		}
 	}
-	return nuevodescriptor;	//Devuelve -1 si ha ocurrido algun error
+	return nuevodescriptor;							//Devuelve -1 si ha ocurrido algun error
 }
 
-int execcd(tline * line){	//Devuelve 0 si el mandato que hemos pasado es cd y 1 en caso contrario
+int execcd(tline * line){							//Devuelve 1 si el mandato que hemos pasado es cd y 0 en caso contrario. Ejecuta el mandato cd
 	if(strcmp(line->commands[i].argv[0], "cd") == 0 && (line->ncommands == 1)){
-		if(line->commands[i].argc > 2){		//Si hay mas argumentos de la cuenta se imprime error y aborta ejecucion
+		if(line->commands[i].argc > 2){				//Si hay mas argumentos de la cuenta se imprime error y aborta ejecucion
 			fprintf(stderr, "No se puede ejecutar el mandato cd: Numero de argumentos de cd (%d) debe ser 0 o 1\n", line->commands[i].argc);
 		}
 		else{
 			char nuevaruta[1024];					//Aqui guardaremos la ruta del nuevo directorio al que nos moveremos para imprimirlo por pantalla
-			if(line->commands[i].argc == 1){	//Si el mandato solo es cd
+			if(line->commands[i].argc == 1){		//Si el mandato solo es cd (sin nada mas. ej: cd)
 			char *ruta = getenv("HOME");
 				if(chdir(ruta) == 0){
 					getcwd(nuevaruta, 1024);
@@ -60,16 +63,13 @@ int execcd(tline * line){	//Devuelve 0 si el mandato que hemos pasado es cd y 1 
 			}
 			else {									//Si el mandato es cd Desktop (por ejemplo)
 				char ruta[1024];
-				//printf("%s, --> %c\n", line->commands[i].argv[1], line->commands[i].argv[1][0]);
 				if((char)line->commands[i].argv[1][0] == '/'){
 					strcpy(ruta, line->commands[i].argv[1]);
-				//	printf("%s\n", ruta);
 				}
 				else{
 					getcwd(ruta, 1024);
 					strcat(ruta, "/");
 					strcat(ruta, line->commands[i].argv[1]);
-				//	printf("%s\n", ruta);
 				}
 				if(chdir(ruta) == 0){
 					getcwd(nuevaruta, 1024);
@@ -91,7 +91,7 @@ int execcd(tline * line){	//Devuelve 0 si el mandato que hemos pasado es cd y 1 
 	return 0;
 }
 
-int showmask(){
+int showmask(){								//Imprime por pantalla la mascara de permisos por defecto actual
     mode_t defaultperm;
 	defaultperm = umask(0);
 	umask(defaultperm);
@@ -99,7 +99,7 @@ int showmask(){
 	return 0;
 }
 
-int execumask(){
+int execumask(){							//Cambia o imprime por pantalla la mascara de permisos por defecto
 	if (strcmp(line->commands[i].argv[0], "umask") == 0 && (line->ncommands == 1)){
 		if(line->commands[i].argc == 1){
 			showmask();
@@ -141,7 +141,7 @@ int execumask(){
 	return 0;
 }
 
-int execmandato(){
+int execmandato(){				//Si la linea introducida por teclado esta solo formada por un mandato, se ejecuta
 	pid_t pid;
 	pid=fork();
 
@@ -171,8 +171,6 @@ int execmandato(){
 		}
 		else{
 			procesos[max].pid = pid;
-		//	procesos[max].status = waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
-		//	waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
 			max++;
 			max = max % 1024;
 		}
@@ -180,7 +178,7 @@ int execmandato(){
 	return 0;
 }
 
-int execnmandatos(){
+int execnmandatos(){			//Si la linea introducida por teclado esta formada por varios mandatos y pipes, se ejecuta
 	int npipes, nuevodescriptor;
 	pid_t pid;
 	npipes = line->ncommands-1;
@@ -195,9 +193,6 @@ int execnmandatos(){
 		pipe(arraypipes[i]);
 	}
 
-			//int fe;
-			//fe = open(line->redirect_error, O_APPEND | O_CREAT | O_WRONLY, 0666);
-			//dup2(fe, STDERR_FILENO);
 	redirect(STDERR_FILENO, line->redirect_error);
 	for(i=0; i<line->ncommands; i++){			//Ejecutamos los n mandatos
 
@@ -206,12 +201,10 @@ int execnmandatos(){
 		if(pid==0){
 			execcd(line);
 			execumask();
-			//redirect(STDERR_FILENO, line->redirect_error);
 			if(i==0){
 				close(arraypipes[0][0]);
 				nuevodescriptor = redirect (STDIN_FILENO, line->redirect_input);
 				dup2(arraypipes[0][1], STDOUT_FILENO);
-				//printf("Ejecutado comando %d\n", i);
 				if(nuevodescriptor != -1){
 					if(line->background){
 						signal(SIGINT, SIG_IGN);
@@ -228,7 +221,6 @@ int execnmandatos(){
 				close(arraypipes[i-1][1]);
 				redirect(STDOUT_FILENO, line->redirect_output);
 				dup2(arraypipes[i-1][0], STDIN_FILENO);
-				//printf("Ejecutado comando %d\n", i);
 				if(line->background){
 					signal(SIGINT, SIG_IGN);
 				}
@@ -241,7 +233,6 @@ int execnmandatos(){
 				close(arraypipes[i][0]);
 				dup2(arraypipes[i-1][0], STDIN_FILENO);
 				dup2(arraypipes[i][1], STDOUT_FILENO);
-				//printf("Ejecutado comando %d\n", i);
 				if(line->background){
 					signal(SIGINT, SIG_IGN);
 				}
@@ -268,7 +259,6 @@ int execnmandatos(){
 		for(i=0; i< line->ncommands; i++){
 			if(i == line->ncommands-1){
 				procesos[max].pid = pid;
-				//	procesos[max].status = waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
 				max++;
 				max = max % 1024;
 			}
@@ -280,19 +270,18 @@ int execnmandatos(){
 	return 0;
 }
 
-void abortar(){
+void abortar(){				//Salto de linea para abortar la ejecucion de un proceso en foreground
 	printf("\n");
 }
 
-void salir(){
+void salir(){				//Mata todos los procesos en ejecucion en background y sale del programa
 	for(j=0; j<1023; j++){
 		kill(procesos[j].pid, SIGKILL);
 	}
 	exit(0);
 }
 
-int jobs(){
-	//printf("%d", waitpid(procesos[0].pid, &procesos[0].status, WNOHANG));
+int jobs(){					//Muestra la lista de procesos en background activos
 	if(line->ncommands==1 && strcmp(line->commands[i].argv[i], "jobs") == 0){
 		for(j=0; j<1023; j++){
 			procesos[j].status = waitpid(procesos[j].pid, &procesos[j].status, WNOHANG);
@@ -315,8 +304,7 @@ int jobs(){
 	return 0;
 }
 
-void mostrarprocesosterminados(){
-	//printf("%d", waitpid(procesos[0].pid, &procesos[0].status, WNOHANG));
+void mostrarprocesosterminados(){	//Funcion para mostrar los procesos que han terminado. Se ejecuta cada vez que leemos una nueva linea, despues de que sea ejecutada
 	for(j=0; j<1023; j++){
 		procesos[j].status = waitpid(procesos[j].pid, &procesos[j].status, WNOHANG);
 		if (procesos[j].status==-1 && procesos[j].linea != NULL) {
@@ -328,30 +316,28 @@ void mostrarprocesosterminados(){
 	}
 }
 
-void updatebackgroundstatus(){
+void updatebackgroundstatus(){	//Funcion para actualizar el estado de los procesos en background
 	for(j=0; j<1023; j++){
 		procesos[j].status = waitpid(procesos[j].pid, &procesos[j].status, WNOHANG);
 	}
 }
 
-int foreground(){
-	int ultimo;
+int foreground(){		//Funcion para pasar un proceso de background a foreground
+	int ultimo;			//Guardamos en ultimo la ultima posicion del array de procesos que es valida (que tiene algun proceso)
 	ultimo = -1;
 	for(j=1023; j>=0; j--){
 		if(ultimo == -1 && procesos[j].linea != NULL){
 			ultimo = j;
 		}
-		//fprintf(stdout, "%d\n", ultimo);
 	}
-	//fprintf(stdout, "%d", line->commands[i].argc);
 	if(strcmp(line->commands[i].argv[i], "fg") == 0){
 		if(line->ncommands == 1 && ultimo != -1){
-			if(line->commands[i].argc == 1){
+			if(line->commands[i].argc == 1){				//Si el mandato introducido es fg solo, tomamos la posicion dada por ultimo
 				fprintf(stdout, "%s", procesos[ultimo].linea);
 				waitpid(procesos[ultimo].pid, &procesos[ultimo].status, 0);
 			}
 			else if (line->commands[i].argc == 2){
-				char *posicion = line->commands[i].argv[1];
+				char *posicion = line->commands[i].argv[1];	//Si el mandato introducido es fg con algo mas, se compureba que ese algo mas sea un numero valido y se toma ese proceso de la lista
 				int a = atoi(posicion);
 				if(a >= 0 && a<1024) {
 					if(procesos[a].linea != NULL){
@@ -383,66 +369,31 @@ int foreground(){
 }
 
 int main(void) {
-/*	char buf[1024];
-	tline * line;
-	int i,j;
-
-	printf("==> ");	
-	while (fgets(buf, 1024, stdin)) {
-		
-		line = tokenize(buf);
-		if (line==NULL) {
-			continue;
-		}
-		if (line->redirect_input != NULL) {
-			printf("redirección de entrada: %s\n", line->redirect_input);
-		}
-		if (line->redirect_output != NULL) {
-			printf("redirección de salida: %s\n", line->redirect_output);
-		}
-		if (line->redirect_error != NULL) {
-			printf("redirección de error: %s\n", line->redirect_error);
-		}
-		if (line->background) {
-			printf("comando a ejecutarse en background\n");
-		} 
-		for (i=0; i<line->ncommands; i++) {
-			printf("orden %d (%s):\n", i, line->commands[i].filename);
-			for (j=0; j<line->commands[i].argc; j++) {
-				printf("  argumento %d: %s\n", j, line->commands[i].argv[j]);
-			}
-		}
-		printf("==> ");	
-	}
-*/
 
 max = 0;
 char buf[1024];
-	//int i;
 
 	printf("msh> ");	
 	signal(SIGINT, SIG_IGN);
 
 	while (fgets(buf, 1024, stdin)) {
 
-		updatebackgroundstatus();
+		updatebackgroundstatus();		//Actualizamos el estado de los procesos en background, para que si alguno ha acabado, mostrarlo al final
 
-		signal(SIGINT, abortar);
-		//line->redirect_input=NULL;				//inicializamos entrada para que no se quede en un bucle infinito
+		signal(SIGINT, abortar);		//Establecemos senal Ctrl+C para procesos en foreground
 		line = tokenize(buf);
 
 		if (line==NULL){
 			continue;
 		}
 		if(line->background==1){
-			//Ver como hacerlo
 			procesos[max].linea = (char *)malloc(1024*sizeof(char));
 			strcpy(procesos[max].linea, buf);
 		}	
-			//Codigo para ejecutar uno o varios mandatos
+		
+			//Codigo para ejecutar un solo mandato
 
-			//NOTA: Antes de entrar aqui, comprobar que el mandato introducido es valido
-		if(line->ncommands==1){						//Pongo este if porque de momento estoy haciendo que funcione para un comando. Veremos si se puede quitar al hacerlo para mas comandos
+		if(line->ncommands==1){
 			
 			i=0;
 
@@ -455,7 +406,7 @@ char buf[1024];
 
 			}
 		}
-			//Fin de codigo para ejecutar un mandato
+			//Fin de codigo para ejecutar un solo mandato
 			//Ahora codigo para ejecutar varios mandatos
 		else{
 			
@@ -463,13 +414,11 @@ char buf[1024];
 
 		}
 
-		mostrarprocesosterminados();
+			//Fin de codigo para ejcutar varios mandatos
+
+		mostrarprocesosterminados();		//Mostramos si ha habido procesos en background que han terminado
 		printf("msh> ");
-		signal(SIGINT, SIG_IGN);
-		//mostrarprocesosterminados();
+		signal(SIGINT, SIG_IGN);			//Ignoramos Ctrl+C mientras leemos nueva linea
 	}
 	return 0;
 }
-
-//gcc -Wall -Wextra ./test.c ./libparser.a -o ./test -static
-//./test
