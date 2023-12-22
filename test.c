@@ -153,6 +153,9 @@ int execmandato(){
 		redirect(STDERR_FILENO, line->redirect_error);
 
 		if(nuevodescriptor != -1){
+			if(line->background){
+				signal(SIGINT, SIG_IGN);
+			}
 			execv(line->commands[i].filename, line->commands[i].argv);
 			fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 		} 
@@ -210,6 +213,9 @@ int execnmandatos(){
 				dup2(arraypipes[0][1], STDOUT_FILENO);
 				//printf("Ejecutado comando %d\n", i);
 				if(nuevodescriptor != -1){
+					if(line->background){
+						signal(SIGINT, SIG_IGN);
+					}
 					execv(line->commands[i].filename, line->commands[i].argv);
 					fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 				}
@@ -223,6 +229,9 @@ int execnmandatos(){
 				redirect(STDOUT_FILENO, line->redirect_output);
 				dup2(arraypipes[i-1][0], STDIN_FILENO);
 				//printf("Ejecutado comando %d\n", i);
+				if(line->background){
+					signal(SIGINT, SIG_IGN);
+				}
 				execv(line->commands[i].filename, line->commands[i].argv);
 				fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 				exit(1);
@@ -233,6 +242,9 @@ int execnmandatos(){
 				dup2(arraypipes[i-1][0], STDIN_FILENO);
 				dup2(arraypipes[i][1], STDOUT_FILENO);
 				//printf("Ejecutado comando %d\n", i);
+				if(line->background){
+					signal(SIGINT, SIG_IGN);
+				}
 				execv(line->commands[i].filename, line->commands[i].argv);
 				fprintf(stderr, "%s: No se encuentra el mandato. Error ejecutando comando %d.\n", line->commands[i].argv[0], i);
 				exit(1);
@@ -273,6 +285,9 @@ void abortar(){
 }
 
 void salir(){
+	for(j=0; j<1023; j++){
+		kill(procesos[j].pid, SIGKILL);
+	}
 	exit(0);
 }
 
