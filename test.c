@@ -247,8 +247,23 @@ int execnmandatos(){
 		}
 	}
 
-	for(i=0; i<line->ncommands; i++){
-		waitpid(arraypids[i], NULL, 0);
+	if(!line->background){
+		for(i=0; i<line->ncommands; i++){
+			waitpid(arraypids[i], NULL, 0);
+		}
+	}
+	else{
+		for(i=0; i< line->ncommands; i++){
+			if(i == line->ncommands-1){
+				procesos[max].pid = pid;
+				//	procesos[max].status = waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
+				max++;
+				max = max % 1024;
+			}
+			else{
+				waitpid(procesos[max].pid, &procesos[max].status, WNOHANG);
+			}
+		}
 	}
 	return 0;
 }
