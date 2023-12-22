@@ -334,6 +334,54 @@ void updatebackgroundstatus(){
 	}
 }
 
+int foreground(){
+	int ultimo;
+	ultimo = -1;
+	for(j=1023; j>=0; j--){
+		if(ultimo == -1 && procesos[j].linea != NULL){
+			ultimo = j;
+		}
+		//fprintf(stdout, "%d\n", ultimo);
+	}
+	//fprintf(stdout, "%d", line->commands[i].argc);
+	if(strcmp(line->commands[i].argv[i], "fg") == 0){
+		if(line->ncommands == 1 && ultimo != -1){
+			if(line->commands[i].argc == 1){
+				fprintf(stdout, "%s", procesos[ultimo].linea);
+				waitpid(procesos[ultimo].pid, &procesos[ultimo].status, 0);
+			}
+			else if (line->commands[i].argc == 2){
+				char *posicion = line->commands[i].argv[1];
+				int a = atoi(posicion);
+				if(a >= 0 && a<1024) {
+					if(procesos[a].linea != NULL){
+						fprintf(stdout, "%s", procesos[a].linea);
+						waitpid(procesos[a].pid, &procesos[a].status, 0);
+					}
+					else{
+						fprintf(stderr, "fg: Error. No se encuentra el mandato\n");
+					}
+				}
+				else{
+					fprintf(stderr, "fg: Numero introducido (%d) no es valido\n", a);
+				}
+			}
+			else{
+				fprintf(stderr, "fg: Numero de argumentos (%d) debe ser 0 o 1\n", line->commands[i].argc);
+			}
+		}
+		else if(ultimo == -1){
+			fprintf(stderr, "fg: No se encuentra el mandato en bg\n");
+		}
+		else{
+			fprintf(stderr, "No se puede ejecutar el mandato fg. Error al ejecutar el mandato %d\n", i);
+		}
+
+		return 1;
+	}
+	return 0;
+}
+
 int main(void) {
 /*	char buf[1024];
 	tline * line;
@@ -398,7 +446,7 @@ char buf[1024];
 			
 			i=0;
 
-			if(!execcd(line) && !execumask() && !jobs()){
+			if(!execcd(line) && !execumask() && !jobs() && !foreground()){
 
 				if(strcmp(line->commands[0].argv[0], "exit") == 0){
 					salir();
